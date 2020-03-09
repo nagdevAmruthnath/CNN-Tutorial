@@ -1,0 +1,196 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+library(keras)
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE}
+original_dataset_dir = "/home/rstudio/train"
+
+base_dir = "/home/rstudio/data"
+dir.create(base_dir)
+
+train_dir = file.path(base_dir, "train")
+dir.create(train_dir)
+
+test_dir = file.path(base_dir, "test")
+dir.create(test_dir)
+
+train_cats_dir = file.path(train_dir, "cats")
+dir.create(train_cats_dir)
+
+train_dogs_dir = file.path(train_dir, "dogs")
+dir.create(train_dogs_dir)
+
+test_cats_dir = file.path(test_dir, "cats")
+dir.create(test_cats_dir)
+
+test_dogs_dir = file.path(test_dir, "dogs")
+dir.create(test_dogs_dir)
+
+fnames = paste0("cat.", 1:2000, ".jpg")
+file.copy(file.path(original_dataset_dir, fnames), 
+          file.path(train_cats_dir)) 
+
+fnames = paste0("cat.", 2001:3000, ".jpg")
+file.copy(file.path(original_dataset_dir, fnames),
+          file.path(test_cats_dir))
+
+fnames = paste0("dog.", 1:2000, ".jpg")
+file.copy(file.path(original_dataset_dir, fnames),
+          file.path(train_dogs_dir))
+
+fnames = paste0("dog.", 2001:3000, ".jpg")
+file.copy(file.path(original_dataset_dir, fnames),
+          file.path(test_dogs_dir))
+```
+
+### Set inital parameters
+```{r}
+# set path
+path = "/home/rstudio/data/"
+
+# set inital parameters
+img_width = 150
+img_height = 150
+channels = 3
+output_n = 2
+train_samples = length(list.files(paste0(path,"train/cats"))) + length(list.files(paste0(path,"train/dogs")))
+test_samples = length(list.files(paste0(path,"test/cats"))) + length(list.files(paste0(path,"test/dogs")))
+batch_size = 50
+
+# set dataset directory
+train_dir = paste0(path,"train")
+test_dir = paste0(path,"test")
+```
+
+
+```{r}
+
+# CNN model
+model = keras_model_sequential() %>% 
+  layer_conv_2d(filters = 8, kernel_size = c(3,3), activation = "relu", input_shape = c(img_width,img_height,channels)) %>% 
+  layer_conv_2d(filters = 16, kernel_size = c(3,3), activation = "relu") %>% 
+  layer_max_pooling_2d(pool_size = c(2,2)) %>% 
+  layer_conv_2d(filters = 32, kernel_size = c(3,3), activation = "relu") %>% 
+  layer_max_pooling_2d(pool_size = c(2,2)) %>% 
+  layer_conv_2d(filters = 64, kernel_size = c(3,3), activation = "relu") %>% 
+  layer_max_pooling_2d(pool_size = c(2,2)) %>% 
+  layer_conv_2d(filters = 16, kernel_size = c(3,3), activation = "relu") %>% 
+  layer_flatten() %>% 
+  layer_dense(units = 64, activation = "relu") %>% 
+  layer_dense(units = 64, activation = "relu") %>% 
+  layer_dropout(rate = 0.3) %>% 
+  layer_dense(units = 128, activation = "relu") %>% 
+  layer_dense(units = 128, activation = "relu") %>% 
+  layer_dropout(rate = 0.3) %>% 
+  layer_dense(units = 256, activation = "relu") %>% 
+  layer_dense(units = 256, activation = "relu") %>% 
+  layer_dropout(rate = 0.3) %>% 
+  layer_dense(units = 64, activation = "relu") %>% 
+  layer_dense(units = 64, activation = "relu") %>% 
+  layer_dropout(rate = 0.3) %>% 
+  layer_dense(units = 32, activation = "relu") %>% 
+  layer_dense(units = output_n, activation = "softmax")
+
+# summary of the overall model
+summary(model)
+```
+
+```{r}
+# Train data image preprocessing
+datagen = image_data_generator(
+                               rotation_range = 40,
+                               width_shift_range = 0.2,
+                               height_shift_range = 0.2,
+                               shear_range = 0.2,
+                               zoom_range = 0.2,
+                               horizontal_flip = TRUE,
+                               fill_mode = "nearest",
+                               samplewise_std_normalization = TRUE
+                              )
+```
+
+```{r}
+# get all the train set
+train_generator = flow_images_from_directory(
+                                              train_dir,                 
+                                              datagen,  
+                                              color_mode = "rgb",
+                                              target_size = c(img_width, img_height), 
+                                              batch_size = batch_size,
+                                              class_mode = "categorical", 
+                                              shuffle = TRUE
+)
+
+# Get test data set
+test_generator = flow_images_from_directory(
+                                            test_dir,
+                                            datagen,
+                                            color_mode = "rgb",
+                                            target_size =  c(img_width, img_height),
+                                            batch_size = batch_size,
+                                            class_mode = "categorical",
+                                            shuffle = TRUE
+)
+```
+
+```{r}
+# compile the model
+model %>% compile(
+                          loss = "binary_crossentropy",
+                          optimizer = optimizer_adamax(lr = 0.001, decay = 0),
+                          metrics = c("accuracy")
+)
+```
+
+```{r}
+history = model %>% fit_generator(
+                                  train_generator,
+                                  steps_per_epoch = as.integer(train_samples/batch_size),
+                                  epochs = 10,
+                                  validation_data = test_generator,
+                                  validation_steps = 10,
+                                  initial_epoch = 1
+)
+```
+
+```{r fig.height=7, fig.width=13}
+plot(history)
+```
+```{r}
+# load image
+x = image_load(paste0(path,"test/cats/cat.1510.jpg"),target_size =  c(img_width, img_height)) 
+data = x %>% array_reshape(c(-1,img_width, img_height, channels))
+
+```
+
+
+```{r}
+# what layer do we want to look at?
+index = 5
+
+# choose that layer as model
+intermediate_layer_model = keras_model(inputs = model$input,
+                                        outputs = get_layer(model, index = index)$output)
+
+# predict on that layer
+intermediate_output = predict(intermediate_layer_model, data)
+
+# dimensionso of prediction
+dim(intermediate_output)
+```
+
+```{r fig.height=10, fig.width=10}
+par(mfrow = c(3,3))
+for(i in 1:9){
+  image(intermediate_output[1,,,i])
+}
+```
