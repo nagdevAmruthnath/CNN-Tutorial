@@ -164,10 +164,15 @@ history = model %>% fit_generator(
 
 ```{r fig.height=7, fig.width=13}
 plot(history)
+
+save_model_hdf5(model, "/home/rstudio/model", overwrite = TRUE,
+  include_optimizer = TRUE)
 ```
 ```{r}
+model = load_model_hdf5("/home/rstudio/model", custom_objects = NULL)
+
 # load image
-x = image_load(paste0(path,"test/cats/cat.1510.jpg"),target_size =  c(img_width, img_height)) 
+x = image_load(paste0(path,"test/cats/cat.2001.jpg"),target_size =  c(img_width, img_height)) 
 data = x %>% array_reshape(c(-1,img_width, img_height, channels))
 
 ```
@@ -175,7 +180,7 @@ data = x %>% array_reshape(c(-1,img_width, img_height, channels))
 
 ```{r}
 # what layer do we want to look at?
-index = 5
+index = 6
 
 # choose that layer as model
 intermediate_layer_model = keras_model(inputs = model$input,
